@@ -9,17 +9,20 @@ extern int report();
 void test(const int m, const int n) {
   void * alloca[m];
   for (int i = 0; i < n; ++i) {
-    int r = random();
-    int size = r % 4097;
-    if (size == 0) size = r % 4*1024*1024;
+    uint32_t r = random();
+    uint32_t size = r % 4097;
+    if (size == 0) size = r % (4*1024*1024);
     alloca[random() % m] = alloc(size);
   }
-  if (random() % 1) {
+  if (random() & 1) {
+    test(random() % 100, random() % 1000);
+  }
+  if (random() & 1) {
     test(random() % 100, random() % 1000);
   }
 }
 
 int start() {
-  // test(1, 1);
-  return 0; //report();
+  test(100, 1000);
+  return report();
 }
