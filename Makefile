@@ -1,11 +1,20 @@
 MAKEFLAGS += -r
+TARGET=x86_64-w64-windows
+VCROOT=C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC
+UCRT=C:\Program Files (x86)\Windows Kits\10\Lib\10.0.10240.0\ucrt\x64
 
-default : test.exe
+default : test.exe testc.exe
 
 %.ll : %.c
-	clang -O3 -target x86_64-w64-windows -emit-llvm -S $*.c -o $@
+	clang -O3 -g -target ${TARGET} -emit-llvm -S $*.c -o $@
 
 test.ll : prng.h
+
+test.bc : test.ll
+	sed -e 's/\(define .* @test[^!{]*\)/\1gc "statepoint-example" /' $^ | \
+	  opt -O3 -rewrite-statepoints-for-gc -o $@
+
+gc.ll : rt.h align.h box.h gc.copy.h
 
 %.bc : %.ll
 	opt -O3 $^ -o $@
@@ -14,10 +23,20 @@ test.ll : prng.h
 	llc -O3 $^ -o $@
 
 %.o : %.s
-	llvm-mc -filetype=obj $^ -o $@
+	llvm-mc -g -filetype=obj $^ -o $@
 
-test.exe : test.o alloc.o
-	../llvm/_build/bin/lld-link $^ /subsystem:console /entry:start /out:$@ /defaultlib:kernel32 /dynamicbase:no
+test.exe : gcbegin.o test.o alloc.bc utils.o gc.bc stackmap.bc
+	../llvm/_build/bin/lld-link $^ /subsystem:console /entry:start /out:$@ \
+		 /defaultlib:kernel32 \
+		 /defaultlib:ucrt /libpath:'${UCRT}' \
+		 /dynamicbase:no \
+		 /pdb:test.pdb \
+		 /merge:.llvm_stackmaps=.rdata
+
+testc.exe : main.o test.o alloc.o
+	clang -O3 -g -target ${TARGET} $^ -o $@ \
+	  -L'${UCRT}' \
+	  -L'${VCROOT}\lib\amd64'
 
 .PHONY : default
 
