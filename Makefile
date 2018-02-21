@@ -1,7 +1,7 @@
 MAKEFLAGS += -r
 TARGET=x86_64-w64-windows
 VCROOT=C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC
-UCRT=C:\Program Files (x86)\Windows Kits\10\Lib\10.0.10240.0\ucrt\x64
+UCRT=C:\Program Files (x86)\Windows Kits\10\Lib\10.0.16299.0\ucrt\x64
 
 default : test.exe testc.exe
 
@@ -12,6 +12,8 @@ test.ll : prng.h
 
 test.bc : test.ll
 	sed -e 's/\(define .* @test[^!{]*\)/\1gc "statepoint-example" /' $^ | \
+	sed -e 's/getelementptr inbounds i16, i16\* \([^,]*\), i64 2/getelementptr inbounds i8, i8 addrspace(1)* \1, i64 4/g' | \
+	sed -e 's/getelementptr inbounds i16, i16\* \([^,]*\), i64 4/getelementptr inbounds i8, i8 addrspace(1)* \1, i64 8/g' | \
 	sed -e 's/bitcast i16\*/addrspacecast i8 addrspace(1)*/g' | \
 	sed -e 's/i16\*/i8 addrspace(1)*/g' | \
 	sed -e 's/i16/i8/g' | \

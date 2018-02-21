@@ -1,3 +1,5 @@
+#include <string.h>
+
 void __chkstk() {}
 
 void * memcpy(void * restrict to, const void * restrict from, size_t bytes) {

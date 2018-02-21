@@ -17,39 +17,33 @@ extern int report();
 static ref_t randomAlloc() {
     uint32_t r = random();
     uint32_t size = r % 4097;
-    uint32_t children = random() % 10;
-    if (size == 0) {
-        size = r % (2*1024*1024 - 8);
-        children = 0;
-    }
+    uint32_t children = random() % 100;
     return allocInts(size, children);
 }
 
  __attribute__((noinline))
  static uint64_t sum(ref_t ints) {
-    uint32_t * tree = (uint32_t *) ints;
-    printf("nother=%d  nref=%d\n", tree[0], tree[1]);
-    __builtin_debugtrap();
-    uint64_t * values = (uint64_t *) (tree + 2);
+    tree_t * tree = (tree_t *) ints;
+    // printf("nint=%d  nnest=%d\n", tree->nother, tree->nref);
     uint64_t total = 0;
-    for (int i = 0; i < tree[0]; ++i) {
-        total += values[i];
+    for (int i = 0; i < tree->nother; ++i) {
+        total += tree->values[i];
     }
-    ref_t * children = (ref_t *) &values[tree[0]];
-    for (int i = 0; i < tree[1]; ++i) {
+    ref_t * children = (ref_t *) &tree->values[tree->nother];
+    for (int i = 0; i < tree->nref; ++i) {
         total += sum(children[i]);
     }
     return total;
 }
 
 uint64_t test() {
-    if (random() % 10 == 0)
+    if (random() % 100 == 0)
         return 0;
     ref_t t1 = randomAlloc();
-    return sum(t1);
-    // ref_t t2 = randomAlloc();
-    // uint64_t nested = test();
-    // return nested + sum(t1) + sum(t2);
+    ref_t t2 = randomAlloc();
+    ref_t t3 = allocInts(2*1024*1024 / 8 - 1, 0);
+    uint64_t nested = test();
+    return nested + sum(t1) + sum(t2) + sum(t3);
 }
 
 int start() {

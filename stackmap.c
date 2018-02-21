@@ -119,24 +119,24 @@ const struct record_t * __stackmap_find(const struct stackmap_t * pStackmap, con
 
 static void ** __stackmap_location(const struct location_t * location, const char * rsp) {
     // assert (location->location == 3 && "Not an indirect reference location!");
+    // printf("Stack-map location: type=%d  reg=%d  offset=%d\n", location->location, location->regnum, location->offsetOrConstant);
     switch (location->location) {
         case 3: // Indirect [Reg + Offset]
             // assert (location->regnum == 7 && "Not RSP-relative!");
-            return (void **) rsp + location->offsetOrConstant;
+            return (void **) (rsp + location->offsetOrConstant);
     }
     return 0;
 }
 
+__attribute__((noinline))
 static void __stack_walk(const struct stackmap_t * pStackmap, const char * rip, const char * rsp,
                          __attribute__((nothrow)) void * (* callback)(void *, void *), void * state)
 {
-    // __builtin_debugtrap();
     uint64_t stackSize;
     do {
         const struct record_t * record = __stackmap_find(pStackmap, rip, &stackSize);
         if (record == 0)
             return;
-        printf("Stack-map record locations: %d\n", record->nLocations);
         for (int i = 3; i < record->nLocations - 1; i += 2) {
             const struct location_t * baseLocation = record->locations + i;
             const struct location_t * referenceLocation = record->locations + i + 1;
@@ -157,6 +157,6 @@ void gc(void * (* callback)(void *, void *), void * state) {
     const void * rip = __builtin_return_address(0);
     const char * bp = __builtin_frame_address(0);
     const char * sp = bp + 8; // Skip %rbp pushed onto the stack
-    const void * rsp = sp + 0x28; // Spilled registers
+    const void * rsp = sp + 0x68; // Spilled registers
     __stack_walk(&__stackmap_start__, rip, rsp, callback, state);
 }

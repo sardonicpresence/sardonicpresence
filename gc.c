@@ -43,7 +43,7 @@ typedef struct {
 static bool gc_shouldCopy(const void * context, const char * p) {
     gc_collection_t * state = (gc_collection_t *) context;
     bool inBlock = p >= state->start && p < state->end;
-    printf("Should%s copy %p\n", inBlock ? "" : " NOT", p);
+    printf("Should%s copy %p as it is within %p - %p\n", inBlock ? "" : " NOT", p, state->start, state->end);
     return inBlock;
 }
 
@@ -107,8 +107,4 @@ void * __cdecl malloc(size_t size) {
     header->nref = 0;
     edenNext = allocated + size + sizeof(box_t);
     return allocated;
-}
-
-void __cdecl free(void * p) {
-    // No explicit freeing
 }
