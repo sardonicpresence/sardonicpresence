@@ -12,7 +12,10 @@ test.ll : prng.h
 
 test.bc : test.ll
 	sed -e 's/\(define .* @test[^!{]*\)/\1gc "statepoint-example" /' $^ | \
-	  opt -O3 -rewrite-statepoints-for-gc -o $@
+	sed -e 's/bitcast i16\*/addrspacecast i8 addrspace(1)*/g' | \
+	sed -e 's/i16\*/i8 addrspace(1)*/g' | \
+	sed -e 's/i16/i8/g' | \
+	  opt -rewrite-statepoints-for-gc -o $@
 
 gc.ll : rt.h align.h box.h gc.copy.h
 
@@ -33,7 +36,7 @@ test.exe : gcbegin.o test.o alloc.bc utils.o gc.bc stackmap.bc
 		 /pdb:test.pdb \
 		 /merge:.llvm_stackmaps=.rdata
 
-testc.exe : main.o test.o alloc.o
+testc.exe : main.o test.o crt.c
 	clang -O3 -g -target ${TARGET} $^ -o $@ \
 	  -L'${UCRT}' \
 	  -L'${VCROOT}\lib\amd64'
