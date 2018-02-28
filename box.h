@@ -35,7 +35,7 @@ static size_t glc_box_copysize(const char * p) {
  */
 static void glc_box_walkobj(void * context, void * (*callback)(void * context, const char * ref, size_t offset), const char * p) {
     box_t * box = (box_t *) p;
-    const char ** refs = &box->content[0];
+    const char ** refs = &box->content[box->nother];
     for (int i = 0; i < box->nref; ++i) {
         const char ** ref = refs + i;
         size_t offset = (char *) ref - (char *) box;

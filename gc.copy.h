@@ -5,21 +5,22 @@
 
 #include "rt.h"
 #include "box.h"
+#include <stdio.h>
 
 extern uint64_t g_copied;
 
 typedef struct {
-    char * parent;
+    const char * parent;
     char * (*whereTo)(void *, size_t);
     bool (*shouldCopy)(const void *, const char *);
     void * context;
+    int level;
 } copy_state_t;
 
 static char * gc_copy_nonref(void * context, char * (*whereTo)(void * context, size_t size), const char * from) {
-    copy_state_t * state = (copy_state_t *) context;
     size_t size = glc_box_sizeof(from);
     size_t toCopy = glc_box_copysize(from);
-    char * to = (*state->whereTo)(state->context, size);
+    char * to = (*whereTo)(context, size);
     memcpy(to, from, toCopy);
     g_copied += toCopy;
     return to;
@@ -27,25 +28,47 @@ static char * gc_copy_nonref(void * context, char * (*whereTo)(void * context, s
 
 static void * gc_copy_reference(void * context, const char * from, size_t offset) {
     copy_state_t * state = (copy_state_t *) context;
-    if (!(*state->shouldCopy)(state->context, from))
-        return state;
+    const char * parent = state->parent;
+    const box_t * box = (box_t *) parent;
+
+    // for (int i = 0; i < state->level; ++i)
+    //     printf(" ");
+    int ichild = (offset - 8 * (1 + box->nother)) / 8;
+    // printf("%d/%d: ", ichild, box->nref);
+
+    if (from == NULL) {
+        // printf("<null>\n");
+        return context;
+    }
 
     // TODO: Consider tagging/untagging
-
-    char * to = gc_copy_nonref(state->context, state->whereTo, from);
+    const char * to = from;
+    if ((*state->shouldCopy)(state->context, from)) {
+        to = gc_copy_nonref(state->context, state->whereTo, from);
+        // printf("%p -> %p\n", from, to);
+    } else {
+        // printf("%p (not relocatng)\n", to);
+        // return state;
+    }
 
     // Copy referenced objects, updating references
-    char * parent = state->parent;
-    *((char **) (parent + offset)) = to;
+    *((const char **) (parent + offset)) = to;
     state->parent = to;
+    ++state->level;
     glc_box_walkobj(state, &gc_copy_reference, from);
     state->parent = parent;
+    --state->level;
     return state;
 }
 
 static void * gc_copy(void * context, char * (*whereTo)(void * context, size_t size), bool (*shouldCopy)(const void * context, const char * p), const char * from) {
-    char * to = gc_copy_nonref(context, whereTo, from);
-    copy_state_t state = {to, whereTo, shouldCopy, context};
+    const char * to = from;
+    if ((*shouldCopy)(context, from)) {
+        to = gc_copy_nonref(context, whereTo, from);
+    } else {
+        // return (void *) to;
+    }
+    copy_state_t state = {to, whereTo, shouldCopy, context, 1};
     glc_box_walkobj(&state, &gc_copy_reference, from);
-    return to;
+    return (void *) to;
 }

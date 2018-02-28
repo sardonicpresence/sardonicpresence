@@ -88,6 +88,7 @@ void __stackmap_walk(const struct stackmap_t * pStackmap, bool (* callback)(void
             const void * rip = (const void *) (sizes[i].pFunction + record->ipOffset);
             if (!(*callback)(context, rip, sizes[i].stackSize, record))
                 return;
+            // TODO: Consider exit condition on end of section
             record = nextRecord(record);
         }
     }
@@ -132,31 +133,38 @@ __attribute__((noinline))
 static void __stack_walk(const struct stackmap_t * pStackmap, const char * rip, const char * rsp,
                          __attribute__((nothrow)) void * (* callback)(void *, void *), void * state)
 {
+    // printf("Walking stack:\n");
     uint64_t stackSize;
     do {
         const struct record_t * record = __stackmap_find(pStackmap, rip, &stackSize);
+        // printf("  %p -> %p\n", rip, record);
         if (record == 0)
             return;
+        // printf("        stack size: %d\n", stackSize);
         for (int i = 3; i < record->nLocations - 1; i += 2) {
             const struct location_t * baseLocation = record->locations + i;
             const struct location_t * referenceLocation = record->locations + i + 1;
             void ** pbase = __stackmap_location(baseLocation, rsp);
             void ** preference = __stackmap_location(referenceLocation, rsp);
-            void * prelocated = (*callback) (state, *pbase);
-            *preference = ((char *) *preference - (char *) *pbase) + (char *) prelocated;
+            // printf("Relocating %p (%p) @ %p\n", *preference, *pbase, preference);
+            void * baseNew = (*callback) (state, *pbase);
+            void * referenceNew = ((char *) *preference - (char *) *pbase) + (char *) baseNew;
+            // printf("Relocated %p (%p) to %p (%p) @ %p\n", *preference, *pbase, referenceNew, baseNew, preference);
+            *preference = referenceNew;
         }
-        rsp += stackSize + 0x20; // Shadow space
-        rip = *((void **) rsp + 1);
+        rsp += stackSize + sizeof(void *); // Return address
+        rip = *((void **) rsp - 1);
     } while (rip != 0);
 }
 
 extern void __stackmap_start__;
 
-__attribute__((nothrow))
+__attribute__((nothrow)) __attribute__((always_inline))
 void gc(void * (* callback)(void *, void *), void * state) {
     const void * rip = __builtin_return_address(0);
     const char * bp = __builtin_frame_address(0);
     const char * sp = bp + 8; // Skip %rbp pushed onto the stack
-    const void * rsp = sp + 0x68; // Spilled registers
+    const void * rsp = sp + 0x58; // Spilled registers
+    // __builtin_debugtrap();
     __stack_walk(&__stackmap_start__, rip, rsp, callback, state);
 }

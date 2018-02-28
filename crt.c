@@ -27,10 +27,10 @@ ref_t allocInts(uint32_t nint, uint32_t nnest) {
     for (int i = 0; i < nint; ++i) {
         tree->values[i] = i + 1;
     }
-    ref_t * children = (ref_t *) &tree->values[nint];
-    for (int i = 0; i < nnest; ++i) {
-        children[i] = allocInts(nint / 2, nnest / 3);
-    }
+    // ref_t * children = (ref_t *) &tree->values[nint];
+    // for (int i = 0; i < nnest; ++i) {
+    //     children[i] = allocInts(nint / 2, nnest / 3);
+    // }
     return (ref_t) tree;
 }
 

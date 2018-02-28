@@ -16,9 +16,9 @@ typedef struct {
     uint64_t values[0];
 } tree_t;
 
-__attribute__((alloc_size(1))) __attribute__((returns_nonnull))
+__attribute__((alloc_size(1))) __attribute__((returns_nonnull)) __attribute__((always_inline))
 static void * alloc(uint64_t size) {
-  g_allocated += size;
+  g_allocated += size + 8;
   g_max = size > g_max ? size : g_max;
   g_min = size < g_min ? size : g_min;
   ++g_count;
@@ -33,10 +33,10 @@ ref_t allocInts(uint32_t nint, uint32_t nnest) {
     for (int i = 0; i < nint; ++i) {
         tree->values[i] = i + 1;
     }
-    ref_t * children = (ref_t *) &tree->values[nint];
-    for (int i = 0; i < nnest; ++i) {
-        children[i] = allocInts(nint / 2, nnest / 3);
-    }
+    // ref_t * children = (ref_t *) &tree->values[nint];
+    // for (int i = 0; i < nnest; ++i) {
+    //     children[i] = allocInts(nint / 2, nnest / 3);
+    // }
     return (ref_t) tree;
 }
 

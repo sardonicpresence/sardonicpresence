@@ -30,7 +30,9 @@ static page_t tenured = 0;
 static char * tenuredNext = 0;
 
 static page_t gc_initBlock() {
-    return (page_t) VirtualAlloc(NULL, BLOCK_SIZE, MEM_RESERVE | MEM_COMMIT, MEM_RW);
+    page_t block = (page_t) VirtualAlloc(NULL, BLOCK_SIZE, MEM_RESERVE | MEM_COMMIT, MEM_RW);
+    // printf("Allocated block %p-%p\n", block, block + BLOCK_SIZE - 1);
+    return block;
 }
 
 typedef struct {
@@ -43,28 +45,30 @@ typedef struct {
 static bool gc_shouldCopy(const void * context, const char * p) {
     gc_collection_t * state = (gc_collection_t *) context;
     bool inBlock = p >= state->start && p < state->end;
-    printf("Should%s copy %p as it is within %p - %p\n", inBlock ? "" : " NOT", p, state->start, state->end);
+    // printf("Should%s copy %p as it is within %p - %p\n", inBlock ? "" : " NOT", p, state->start, state->end);
     return inBlock;
 }
 
 static char * gc_next(void * context, size_t size) {
     gc_collection_t * state = (gc_collection_t *) context;
-    char * next = state->next;
-    if (next + size > state->beyond) {
+    char * next = alignSize(state->next, size);
+    if (next + size >= state->beyond) {
         // TODO: What about if we can allocate this but then it will be full?
         // TODO: Perform a next-generation collection
         state->next = next = tenuredNext = tenured = gc_initBlock();
         state->beyond = tenured + BLOCK_SIZE;
+        // printf("Allocating new tenured block @ %p\n", tenured);
     }
     state->next += size;
+    // printf("Allocated %llu @ %p, next: %p beyond: %p\n", size, next, state->next, state->beyond);
     return next;
 }
 
 const char * gc_tenure(const char * from) {
     gc_collection_t collection = {tenuredNext, tenured + BLOCK_SIZE, eden, eden + BLOCK_SIZE};
-    if (!gc_shouldCopy(&collection, from))
-        return from;
-    return gc_copy(&collection, &gc_next, &gc_shouldCopy, from);
+    char * relocated = gc_copy(&collection, &gc_next, &gc_shouldCopy, from);
+    tenuredNext = collection.next;
+    return relocated;
 }
 
 static void * gc_collect_reference(void * unused, void * p) {
@@ -73,29 +77,24 @@ static void * gc_collect_reference(void * unused, void * p) {
     return (void *) gc_tenure((char *) p);
 }
 
+__attribute__((always_inline))
 static void gc_collect() {
-    // TODO
-    // - walk stack to find GC roots
-    // - for each GC root:
-    //   - gc_copy
-    // What do we do when tenured gets full?
-    // How can we predict it will get full ahead of time?
+    // printf("!\n! GC\n!\n");
     if (tenured == 0) {
         tenuredNext = tenured = gc_initBlock();
     }
     gc(&gc_collect_reference, NULL);
-    edenNext = eden;
+    // printf("Collecting block %p-%p\n", eden, eden+BLOCK_SIZE-1);
+    // memset(eden, 0xCC, BLOCK_SIZE);
+    edenNext = eden; // = gc_initBlock();
 }
 
-static void gc_init() {
-    edenNext = eden = gc_initBlock();
-}
-
-__attribute__((alloc_size(1))) __attribute__((returns_nonnull))
+__attribute__((alloc_size(1))) __attribute__((returns_nonnull)) __attribute__((always_inline))
 void * __cdecl malloc(size_t size) {
     size = 8 * ((size + 7) / 8); // Round up to a whole qword
-    if (eden == 0)
-        gc_init(); // TODO: flag as cold?
+    if (eden == 0) {
+        edenNext = eden = gc_initBlock();
+    }
     char * aligned = alignSize(edenNext, size);
     char * allocated = aligned;
     if (aligned + size + sizeof(box_t) - eden > BLOCK_SIZE) {
